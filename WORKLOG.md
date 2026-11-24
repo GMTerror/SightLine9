@@ -5,3 +5,4 @@
 - 2026-11-24: Series 2748746 is ingested into local/sightline.sqlite with no decompression of .zst files.
 - 2026-11-24: Extended ingest_series.py for series 2748746
 - 2026-11-24: Step 3 done with Sonnet. cast_outcomes built for windows 5/10/15. 0 invalid kills in series 2748746. Chose window=10 for demo.
+- 2026-11-24: Step 4 done with Sonnet. Canvas viewer, bounding-box outline, round dropdown, round 1 = 14 live casts, 3 green.
