@@ -190,4 +190,3 @@ data/
 node_modules/
 local/
 ingest_series.py
-tests/

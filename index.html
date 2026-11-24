@@ -6,6 +6,7 @@
 <p><b>Window: 10s after cast. Followed-by, not caused-by.</b></p>
 <label>Round <select id="round"></select></label>
 <span id="count" style="margin-left:16px"></span>
+<br><label>Time <input type="range" id="t" step="1" style="width:500px"></label> <span id="tlabel"></span>
 <span style="margin-left:16px"><span style="color:green">&#9679;</span> caster got a kill within window
  <span style="color:grey;margin-left:8px">&#9679;</span> otherwise</span>
 <br><canvas id="c" width="800" height="800" style="border:1px solid #ccc;margin-top:8px"></canvas>
@@ -13,7 +14,7 @@
 n = <span id="n"></span> live casts in the series.</p>
 <script>
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), sel = document.getElementById('round');
-let B, PAD = 40;
+let B, PAD = 40, ROWS = [], PICK = null;
 // x to the right, y up (flipped); same scale on both axes.
 const scale = () => Math.min((cv.width - 2*PAD) / (B.max_x - B.min_x), (cv.height - 2*PAD) / (B.max_y - B.min_y));
 const px = x => PAD + (x - B.min_x) * scale();
@@ -23,9 +24,26 @@ function outline() {
   ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
   ctx.strokeRect(px(B.min_x), py(B.max_y), px(B.max_x) - px(B.min_x), py(B.min_y) - py(B.max_y));
 }
-async function draw() {
-  const rows = await (await fetch('/api/casts?round=' + sel.value)).json();
+const T = r => Date.parse(r.cast_time);
+const tsl = document.getElementById('t');
+async function load() {
+  ROWS = await (await fetch('/api/casts?round=' + sel.value)).json();
+  PICK = null;
+  if (ROWS.length) { tsl.min = T(ROWS[0]); tsl.max = T(ROWS[ROWS.length - 1]); tsl.value = tsl.max; }
+  draw();
+}
+function draw() {
+  const tv = +tsl.value;
+  const rows = ROWS.filter(r => T(r) <= tv);
+  document.getElementById('tlabel').textContent = rows.length ? 'cast_time <= ' + new Date(tv).toISOString() : '';
   outline();
+  if (PICK && T(PICK) > tv) PICK = null;
+  if (PICK) {  // aim line: length = 10% of canvas width, direction (view_x, view_y), y flipped
+    const m = Math.hypot(PICK.view_x, PICK.view_y) || 1, L = 0.1 * cv.width;
+    ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(px(PICK.x), py(PICK.y));
+    ctx.lineTo(px(PICK.x) + L * PICK.view_x / m, py(PICK.y) - L * PICK.view_y / m); ctx.stroke();
+  }
   for (const r of rows) {
     ctx.beginPath(); ctx.arc(px(r.x), py(r.y), 4, 0, 2*Math.PI);
     ctx.fillStyle = r.got_kill ? 'green' : 'grey'; ctx.globalAlpha = 0.8; ctx.fill();
@@ -39,6 +57,12 @@ async function draw() {
   document.getElementById('title').textContent = m.map + ', series ' + m.series;
   document.getElementById('n').textContent = B.n;
   for (const r of m.rounds) sel.add(new Option('Round ' + r, r));
-  sel.onchange = draw; draw();
+  sel.onchange = load; tsl.oninput = draw; load();
+  cv.onclick = e => {
+    const b = cv.getBoundingClientRect(), mx = e.clientX - b.left, my = e.clientY - b.top;
+    const tv = +tsl.value; let best = null, bd = 10;
+    for (const r of ROWS) if (T(r) <= tv) { const d = Math.hypot(px(r.x) - mx, py(r.y) - my); if (d <= bd) { bd = d; best = r; } }
+    PICK = best; draw();
+  };
 })();
 </script>

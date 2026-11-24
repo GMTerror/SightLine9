@@ -34,8 +34,9 @@ def bounds(db):
 
 
 def casts(db, round_number):
-    q = f"SELECT c.pos_x, c.pos_y, o.caster_got_kill, c.ability, c.player_id, c.cast_time {BASE} AND c.round_number = ?"
-    return [dict(zip(("x", "y", "got_kill", "ability", "player_id", "cast_time"), r))
+    q = (f"SELECT c.pos_x, c.pos_y, o.caster_got_kill, c.ability, c.player_id, c.cast_time, c.view_x, c.view_y "
+         f"{BASE} AND c.round_number = ? ORDER BY c.cast_time")
+    return [dict(zip(("x", "y", "got_kill", "ability", "player_id", "cast_time", "view_x", "view_y"), r))
             for r in db.execute(q, ARGS + (round_number,))]
 
 
