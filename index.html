@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sightline9 - fracture, series 2748746</title>
+<body style="font-family:sans-serif;margin:16px">
+<h3>Sightline9: <span id="title"></span></h3>
+<p><b>Window: 10s after cast. Followed-by, not caused-by.</b></p>
+<label>Round <select id="round"></select></label>
+<span id="count" style="margin-left:16px"></span>
+<span style="margin-left:16px"><span style="color:green">&#9679;</span> caster got a kill within window
+ <span style="color:grey;margin-left:8px">&#9679;</span> otherwise</span>
+<br><canvas id="c" width="800" height="800" style="border:1px solid #ccc;margin-top:8px"></canvas>
+<p style="font-size:12px;color:#555">Outline = bounding box of all live fracture cast positions (pos_x, pos_y) in this series, not the true map shape.
+n = <span id="n"></span> live casts in the series.</p>
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d'), sel = document.getElementById('round');
+let B, PAD = 40;
+// x to the right, y up (flipped); same scale on both axes.
+const scale = () => Math.min((cv.width - 2*PAD) / (B.max_x - B.min_x), (cv.height - 2*PAD) / (B.max_y - B.min_y));
+const px = x => PAD + (x - B.min_x) * scale();
+const py = y => cv.height - PAD - (y - B.min_y) * scale();
+function outline() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+  ctx.strokeRect(px(B.min_x), py(B.max_y), px(B.max_x) - px(B.min_x), py(B.min_y) - py(B.max_y));
+}
+async function draw() {
+  const rows = await (await fetch('/api/casts?round=' + sel.value)).json();
+  outline();
+  for (const r of rows) {
+    ctx.beginPath(); ctx.arc(px(r.x), py(r.y), 4, 0, 2*Math.PI);
+    ctx.fillStyle = r.got_kill ? 'green' : 'grey'; ctx.globalAlpha = 0.8; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  document.getElementById('count').textContent = 'Dots on screen: ' + rows.length;
+}
+(async () => {
+  const m = await (await fetch('/api/meta')).json();
+  B = m.bounds;
+  document.getElementById('title').textContent = m.map + ', series ' + m.series;
+  document.getElementById('n').textContent = B.n;
+  for (const r of m.rounds) sel.add(new Option('Round ' + r, r));
+  sel.onchange = draw; draw();
+})();
+</script>
