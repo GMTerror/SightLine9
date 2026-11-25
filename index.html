@@ -172,6 +172,14 @@
   .opc .warn::before { content: "!"; flex: none; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
     background: #ffb020; color: #1a1000; font: 800 11px var(--ui); margin-top: 1px; }
   .opc .note { font-size: 11px; color: var(--faint); }
+  main.wide { grid-template-columns: minmax(0, 1fr) 580px; }
+  #opcmp { display: flex; gap: 10px; }
+  #opcmp[hidden] { display: none; }
+  #opcmp .field { flex: 1; min-width: 0; flex-direction: column; align-items: stretch; gap: 5px; }
+  #opcmp select { width: 100%; }
+  #ops.cmp { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+  #ops.cmp .opc .hd { flex-direction: column; align-items: flex-start; }
+  #ops.cmp .opc .side { text-align: left; }
 </style>
 <body>
 <header>
@@ -226,8 +234,16 @@
     <div id="pane_op" class="sidepane" hidden>
       <h2>Operator tendencies</h2>
       <span class="caption">Window: 10s before early death. Followed-by, not caused-by.</span>
+      <div class="tabs" role="tablist">
+        <button type="button" id="v_cmp" class="on">Compare</button>
+        <button type="button" id="v_all">All opponents</button>
+      </div>
+      <div id="opcmp">
+        <label class="field">Opponent A <select id="opA"></select></label>
+        <label class="field">Opponent B <select id="opB"></select></label>
+      </div>
       <p id="opmeta"></p>
-      <div id="ops"></div>
+      <div id="ops" class="cmp"></div>
     </div>
   </aside>
 </main>
@@ -345,6 +361,40 @@ function showTab(which) {
   document.getElementById('pane_general').hidden = which !== 'general';
   document.getElementById('pane_op').hidden = which !== 'op';
   if (which === 'op' && !OPLOADED) { OPLOADED = true; loadOp(); }
+  applyWide();
+}
+let OPD = null, OPVIEW = 'cmp';
+function applyWide() { document.querySelector('main').classList.toggle('wide', !document.getElementById('pane_op').hidden && OPVIEW === 'cmp'); }
+function setOpView(v) {
+  OPVIEW = v;
+  document.getElementById('v_cmp').classList.toggle('on', v === 'cmp');
+  document.getElementById('v_all').classList.toggle('on', v === 'all');
+  document.getElementById('opcmp').hidden = v !== 'cmp';
+  applyWide(); renderOp();
+}
+function opCard(o, d) {
+  const c = el('div', 'opc' + (o.too_small ? ' small' : ''));
+  const hd = el('div', 'hd'); hd.append(el('span', 'nm', o.name), el('span', 'side', 'Side at death: ' + o.side));
+  const rn = el('div', 'rn'); rn.innerHTML = 'Operator rounds: <b>' + o.op_rounds + '</b>, early deaths analyzed: <b>' + o.early_deaths + '</b>';
+  c.append(hd, rn);
+  if (o.too_small) c.append(el('div', 'warn', 'Sample too small \u2014 not shown as a tendency (top ability n=' + (o.abilities.length ? o.abilities[0].n : 0) + ' < ' + d.min_n + ')'));
+  const ul = el('ul');
+  for (const a of o.abilities) {
+    const li = el('li'); li.append(el('span', 'ab', a.ability), el('span', 'nn', 'n=' + a.n + '/' + o.early_deaths));
+    ul.append(li);
+  }
+  if (o.abilities.length) c.append(ul);
+  c.append(el('div', 'note', 'n/M = early-death rounds where a Cloud9 cast of the ability came within ' + d.window_s + 's before the death.'));
+  return c;
+}
+function renderOp() {
+  if (!OPD) return;
+  const box = document.getElementById('ops'), d = OPD, ops = d.opponents;
+  box.innerHTML = ''; box.classList.toggle('cmp', OPVIEW === 'cmp');
+  if (OPVIEW === 'all') { for (const o of ops) box.append(opCard(o, d)); return; }
+  const a = ops[document.getElementById('opA').value], b = ops[document.getElementById('opB').value];
+  if (a) box.append(opCard(a, d));
+  if (b) box.append(opCard(b, d));
 }
 function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
 function loadOp() {
@@ -352,21 +402,15 @@ function loadOp() {
   meta.textContent = 'Loading\u2026'; box.innerHTML = '';
   fetch('/api/operator_profile').then(r => r.json()).then(d => {
     meta.textContent = 'Series n=' + d.series_n + ', top ' + d.opponents.length + ' opponents by Operator rounds. Shown as a tendency only when top ability n >= ' + d.min_n + '.';
-    for (const o of d.opponents) {
-      const c = el('div', 'opc' + (o.too_small ? ' small' : ''));
-      const hd = el('div', 'hd'); hd.append(el('span', 'nm', o.name), el('span', 'side', 'Side at death: ' + o.side));
-      const rn = el('div', 'rn'); rn.innerHTML = 'Operator rounds: <b>' + o.op_rounds + '</b>, early deaths analyzed: <b>' + o.early_deaths + '</b>';
-      c.append(hd, rn);
-      if (o.too_small) c.append(el('div', 'warn', 'Sample too small \u2014 not shown as a tendency (top ability n=' + (o.abilities.length ? o.abilities[0].n : 0) + ' < ' + d.min_n + ')'));
-      const ul = el('ul');
-      for (const a of o.abilities) {
-        const li = el('li'); li.append(el('span', 'ab', a.ability), el('span', 'nn', 'n=' + a.n + '/' + o.early_deaths));
-        ul.append(li);
-      }
-      if (o.abilities.length) c.append(ul);
-      c.append(el('div', 'note', 'n/M = early-death rounds where a Cloud9 cast of the ability came within ' + d.window_s + 's before the death.'));
-      box.append(c);
+    OPD = d;  // same cached payload; defaults A/B = two highest Operator-round opponents
+    const order = d.opponents.map((o, i) => i).sort((i, j) => d.opponents[j].op_rounds - d.opponents[i].op_rounds);
+    for (const id of ['opA', 'opB']) {
+      const s = document.getElementById(id); s.innerHTML = '';
+      d.opponents.forEach((o, i) => s.add(new Option(o.name + ' (' + o.op_rounds + ' rounds)', i)));
+      s.onchange = renderOp;
     }
+    document.getElementById('opA').value = order[0]; document.getElementById('opB').value = order.length > 1 ? order[1] : order[0];
+    renderOp();
   }).catch(err => { meta.textContent = 'Could not load operator tendencies (' + err.message + ')'; });
 }
 async function loadMatch() {
@@ -399,6 +443,8 @@ async function loadMatch() {
   document.getElementById('copy').onclick = copyCallout;
   document.getElementById('m_general').onclick = () => showTab('general');
   document.getElementById('m_op').onclick = () => showTab('op');
+  document.getElementById('v_cmp').onclick = () => setOpView('cmp');
+  document.getElementById('v_all').onclick = () => setOpView('all');
   MATCHES = await (await fetch('/api/series_list')).json();
   for (const g of MATCHES)
     matchSel.add(new Option(g.map_name + ' \u2014 ' + g.team1 + ' vs ' + g.team2 + ' (' + g.series_id + ')', g.series_id + '|' + g.game_id));
