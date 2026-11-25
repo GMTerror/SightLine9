@@ -14,6 +14,13 @@ def test_round1_dots_equal_sql_count():
         assert expected > 0 and len(serve.casts(db, 1)) == expected
 
 
+def test_top_abilities_matches_card_ranking():
+    top = serve.top_abilities()
+    assert top["series_n"] == 28 and top["window_s"] == 10 and len(top["rows"]) == 5
+    assert top["rows"][0] == {"ability": "dark-cover", "casts": 4834, "caster_got_kill": 370}
+    assert serve.top_abilities() is top  # cached, not recomputed
+
+
 def test_round1_slider_extremes_and_view():
     with serve.connect() as db:
         rows = serve.casts(db, 1)

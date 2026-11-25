@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).parent
 DB_PATH = ROOT / "local" / "sightline.sqlite"
 SERIES, MAP_NAME, WINDOW = "2748746", "fracture", 10
+TOP_CACHE = ROOT / "local" / "top_abilities.json"
+_top = None
 
 # Live casts in the fracture game(s) of the series, with the "followed by" outcome at WINDOW seconds.
 BASE = """FROM casts c
@@ -40,6 +42,35 @@ def casts(db, round_number):
             for r in db.execute(q, ARGS + (round_number,))]
 
 
+def compute_top():
+    """Top-N from cast_outcome_card's ranking over the pooled per-series DBs (ingests only a missing DB)."""
+    import cast_outcome_card as coc
+    team_ids, series_ids = coc.cloud9(coc.DATA_ROOT)
+    valid = coc.valid_games(coc.DATA_ROOT)
+    summaries = []
+    for sid in series_ids:
+        p = coc.DB_DIR / f"{sid}.sqlite"
+        if not p.exists():
+            coc.ingest(sid, db_path=p, data_root=coc.DATA_ROOT)
+        summaries.append(coc.summarize_database(p, valid, team_ids))
+    merged = coc.merge_summaries(summaries)
+    rows = [{"ability": a, "casts": v["casts"], "caster_got_kill": v["caster_got_kill"]}
+            for a, v in coc._ranked(merged["counts"])[:coc.TOP_N]]
+    return {"window_s": coc.WINDOW, "series_n": len(series_ids), "rows": rows}
+
+
+def top_abilities():
+    """Memory cache, then JSON file cache (delete local/top_abilities.json to refresh), then compute."""
+    global _top
+    if _top is None:
+        if TOP_CACHE.exists():
+            _top = json.loads(TOP_CACHE.read_text())
+        else:
+            _top = compute_top()
+            TOP_CACHE.write_text(json.dumps(_top))
+    return _top
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
@@ -53,6 +84,8 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     data = casts(db, int(parse_qs(u.query).get("round", ["0"])[0]))
             body, ctype = json.dumps(data).encode(), "application/json"
+        elif u.path == "/api/top_abilities":
+            body, ctype = json.dumps(top_abilities()).encode(), "application/json"
         else:
             self.send_error(404)
             return
