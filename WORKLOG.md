@@ -7,3 +7,4 @@
 - 2026-11-24: Step 3 done with Sonnet. cast_outcomes built for windows 5/10/15. 0 invalid kills in series 2748746. Chose window=10 for demo.
 - 2026-11-24: Step 4 done with Sonnet. Canvas viewer, bounding-box outline, round dropdown, round 1 = 14 live casts, 3 green.
 - 2026-11-24: Step 5 done with Sonnet. Aim lines on click, time slider, round 1 min=1 dot max=14 dots verified.
+- 2026-11-25: Step 6 done with Opus (profiler) + Sonnet (28-series rerun). Operator profiler built, correctly warns too-small on all 28 series (top ability n=2, below 3). Decision: add separate general cast-outcome card (no Operator filter, pooled, window=10) as main demo card. Operator profiler kept as honest-warning demo moment.
