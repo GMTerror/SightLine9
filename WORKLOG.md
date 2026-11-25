@@ -11,3 +11,4 @@
 - 2026-11-25: General cast-outcome card done with Sonnet. Pooled 28 series, window=10. Top: dark-cover 370/4834 caster-kill-followed casts. This is the main demo card. Operator profiler kept as honest small-sample warning.
 - 2026-11-25: Sidebar wired to real pooled numbers (dark-cover 370/4834 top), Sonnet. Demo flow: canvas + aim lines + round/time slider on left, general-pattern sidebar on right.
 - 2026-11-25: Sort toggle added, Sonnet. Rate view surfaces showstopper 50/102 (49%) as the real standout, dark-cover was only #1 by raw volume.
+- 2026-11-25: UI restyle, Sonnet. Dark theme, two-pane layout, styled controls, card-based sidebar. Functionality unchanged, verified round 1 = 14/3, rate toggle intact.
