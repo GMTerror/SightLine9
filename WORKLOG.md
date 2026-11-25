@@ -14,3 +14,4 @@
 - 2026-11-25: UI restyle, Sonnet. Dark theme, two-pane layout, styled controls, card-based sidebar. Functionality unchanged, verified round 1 = 14/3, rate toggle intact.
 - 2026-11-25: Match selector added, Sonnet. Verified pearl series 2775953 round 17 = 27 dots. Viewer now generalizes across all 28 series, not hardcoded to one.
 - 2026-11-25: Operator tendencies tab added, Sonnet. All 3 opponents correctly flagged too_small in UI. First load ~90s (28-series scan), cached after. Pre-warm cache before live demo.
+- 2026-11-25: Copy-callout button added, Sonnet. Verified clipboard text matches top ability, updates with count/rate toggle.
