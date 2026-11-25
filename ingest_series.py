@@ -12,7 +12,7 @@ from pathlib import Path
 from compression import zstd
 
 DATA_ROOT = Path(os.environ.get(
-    "SIGHTLINE_DATA_ROOT", "path-to-folder")
+    "SIGHTLINE_DATA_ROOT", "./data"))
 DB_PATH = Path(__file__).parent / "local" / "sightline.sqlite"
 
 # Cast-to-kill windows in seconds; cast_outcomes holds one row per live cast per window (window_s column).
@@ -63,7 +63,7 @@ def _round_event(base, actor, target, current_game):
         return actor["id"], target["state"]["sequenceNumber"]
     if base == "game-ended-round":
         return actor["id"], actor["stateDelta"]["segments"][0]["sequenceNumber"]
-    ref = target if base == "team-won-round" else actor  # round-ended-freezetime: actor is the round
+    ref = target if base == "team-won-round" else actor
     return current_game, ref["state"]["sequenceNumber"]
 
 
@@ -81,7 +81,7 @@ def _outcomes(casts, kills, windows):
     """
     by_round = {}
     for k in kills:
-        if k[9]:  # is_valid_kill
+        if k[9]:
             by_round.setdefault((k[1], k[2]), []).append((_ts(k[3]), k[4], k[5], k[7], k[8]))
     rows = []
     for i, c in enumerate(casts, start=1):
@@ -105,7 +105,6 @@ def ingest(series_id, db_path=DB_PATH, data_root=DATA_ROOT):
     stats = {"supplement_rows": 0, "skipped_gap_exceeded": 0, "skipped_null_interpolated": 0,
              "skipped_not_in_grid": 0, "skipped_other_not_in_feed": 0, "casts": 0, "kills": 0,
              "games": 0, "rounds": 0, "casts_not_live": 0}
-    # Skip rules are applied in this order; each row is counted once.
     keep = {}
     for c in _jsonl(data_root / "val-ability-supplements" / f"{series_id}.jsonl.zst"):
         stats["supplement_rows"] += 1
@@ -119,14 +118,14 @@ def ingest(series_id, db_path=DB_PATH, data_root=DATA_ROOT):
             keep[c["grid_event_id"]] = c
 
     casts, kills = [], []
-    games = {}   # game_id -> (game_number, map_name)
-    rounds = {}  # (game_id, round_number) -> {"start", "freeze_end", "end", "winner"}
+    games = {}
+    rounds = {}
     game_id = round_no = None
     for env in _jsonl(data_root / "val" / f"events_{series_id}_grid.jsonl.zst"):
         for e in env["events"]:
             t = e["type"]
             actor, target = e.get("actor") or {}, e.get("target") or {}
-            undo = "!" in t   # a '!' reverses the matching event
+            undo = "!" in t
             base = t.replace("!", "")
             if base == "series-started-game" and undo:
                 rolled = target.get("id") or actor.get("id")

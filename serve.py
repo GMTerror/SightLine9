@@ -22,7 +22,6 @@ POOLED = ROOT / "local" / "pooled"
 _series_cache = None
 _ingest_lock = threading.Lock()
 
-# Live casts in one game, with the "followed by" outcome at WINDOW seconds.
 BASE = """FROM casts c
 JOIN cast_outcomes o ON o.cast_id = c.rowid AND o.window_s = ?
 WHERE c.series_id = ? AND c.game_id = ? AND c.is_live = 1"""
@@ -177,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             sid, gid = q.get("series", [None])[0], q.get("game", [None])[0]
             try:
-                if sid is None or gid is None:  # original behaviour: default series/map
+                if sid is None or gid is None:
                     with connect() as db:
                         if u.path == "/api/meta":
                             data = {"rounds": rounds(db), "bounds": bounds(db), "window_s": WINDOW,

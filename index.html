@@ -42,7 +42,6 @@
   ::placeholder { color: var(--faint); }
   input, select, button { caret-color: var(--accent-hi); }
 
-  /* ---------- top bar ---------- */
   header { display: flex; align-items: center; gap: 18px; min-height: 48px; }
   .brand { display: flex; align-items: center; gap: 12px; flex: none; }
   .logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--raised); border: 1px solid var(--line-hi); }
@@ -62,7 +61,6 @@
   main.wide { grid-template-columns: minmax(0, 1fr) 620px; }
   .pane { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; min-height: 0; box-shadow: var(--shadow); }
 
-  /* ---------- stage ---------- */
   #stage { display: flex; flex-direction: column; padding: 12px; gap: 10px; }
   #wrap {
     position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px;
@@ -88,7 +86,6 @@
   #loading .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-hi); border-top-color: var(--accent-hi); animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* controls bar */
   .dock { display: flex; align-items: flex-end; gap: 22px; padding: 4px 4px 2px; }
   .dock .scrub { flex: 1; }
   .field { display: flex; flex-direction: column; align-items: stretch; gap: 6px; color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .01em; }
@@ -117,7 +114,6 @@
   .foot { margin: 0; padding: 0 4px; font-size: 12px; color: var(--faint); }
   .foot b { color: var(--muted); font-weight: 600; }
 
-  /* ---------- sidebar ---------- */
   #side { padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow: auto; }
   #side h2 { margin: 0; font: 650 17px/1.25 var(--display); letter-spacing: -.015em; }
   #side .caption { align-self: flex-start; }
@@ -288,7 +284,7 @@ function draw() {
     ctx.fillStyle = r.got_kill ? '#34e08b' : '#8190ad'; ctx.globalAlpha = 0.85; ctx.fill();
     ctx.globalAlpha = 1; ctx.lineWidth = 1; ctx.strokeStyle = r.got_kill ? '#c9ffe2' : '#090c12'; ctx.stroke();
   }
-  if (PICK) {  // selection ring
+  if (PICK) {
     ctx.beginPath(); ctx.arc(px(PICK.x), py(PICK.y), 9, 0, 2*Math.PI);
     ctx.strokeStyle = '#7fb0ff'; ctx.lineWidth = 2; ctx.stroke();
   }
