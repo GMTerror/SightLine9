@@ -18,3 +18,5 @@
 - 2026-11-25: Zone renderer built, Sonnet. Fracture placeholder zones don't match real H-shaped layout, confirmed via web search. Lower priority, revisit if time allows. Fallback to bounding box works for unconfigured maps.
 - 2026-11-25: Compare mode added to Operator tab, Sonnet. Side-by-side cards, defaults to top 2 opponents by round count, both amber warnings render correctly matching known numbers.
 - 2026-11-25: Reverted zone-outline feature, Sonnet. Clustering showed cast positions don't reliably map to room geometry with only 3 fracture games. Plain bounding box is more honest than a wrong-shaped layout.
+- 2026-11-25: Updated UI using Impeccable skill and Sonnet.
+- 2026-11-25: Created README

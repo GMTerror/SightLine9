@@ -189,4 +189,3 @@ data/
 *.db
 node_modules/
 local/
-ingest_series.py
