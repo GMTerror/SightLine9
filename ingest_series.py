@@ -11,6 +11,17 @@ from pathlib import Path
 
 from compression import zstd
 
+def _load_env(path=Path(__file__).parent / ".env"):
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
+
+
+_load_env()
+
 DATA_ROOT = Path(os.environ.get(
     "SIGHTLINE_DATA_ROOT", "./data"))
 DB_PATH = Path(__file__).parent / "local" / "sightline.sqlite"

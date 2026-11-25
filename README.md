@@ -16,7 +16,7 @@ A small local viewer for Cloud9 VALORANT ability casts. It shows where casts hap
 
 - Python 3.14 or newer (the code uses `compression.zstd`). Standard library only; nothing to install to run the viewer.
 - `pytest` to run the tests (`pip install pytest`)
-- The GRID starter data folder (contains `meta/` and `val/`). It is not in this repo. Set the `SIGHTLINE_DATA_ROOT` environment variable to its path. If unset, `ingest_series.py` falls back to a hard-coded path on the author's machine, which will not exist on yours.
+- The GRID starter data folder (contains `meta/` and `val/`). It is not in this repo. Set `SIGHTLINE_DATA_ROOT` to its path, as an environment variable or in a `.env` file at the project root (copy `.env.example`; `.env` is gitignored, and a real environment variable wins). If neither is set, `ingest_series.py` falls back to `./data`.
 - `local/` holds generated databases and caches. It is created on first use and is not committed.
 
 ## Run
@@ -27,7 +27,15 @@ python serve.py
 
 Then open http://localhost:8000. The server binds to `127.0.0.1` only, so other machines can't reach it unless you change that in `serve.py`.
 
-Example (PowerShell):
+Set the data path with a `.env` file (recommended):
+
+```
+copy .env.example .env
+# edit .env: SIGHTLINE_DATA_ROOT=C:\path\to\stl-hackathon-2026-grid-starter
+python serve.py
+```
+
+Or with an environment variable (PowerShell), which takes precedence over `.env`:
 
 ```
 $env:SIGHTLINE_DATA_ROOT = "C:\path\to\stl-hackathon-2026-grid-starter"
@@ -52,7 +60,8 @@ Manual check: reload the page, confirm round 1 of series 2748746 (fracture) show
 |---|---|
 | `serve.py` | HTTP server and JSON routes |
 | `index.html` | The viewer (HTML, CSS and JS in one file) |
-| `ingest_series.py` | Ingests one series into a SQLite database |
+| `ingest_series.py` | Ingests one series into a SQLite database; also reads `.env` |
+| `.env.example` | Template for `.env` (`SIGHTLINE_DATA_ROOT`) |
 | `cast_outcome_card.py` | Ranks abilities by caster kills in the window |
 | `operator_profile.py` | Operator opponent profiles (`top_opponents()`) |
 | `tests/` | Viewer and API tests |
@@ -72,7 +81,7 @@ Manual check: reload the page, confirm round 1 of series 2748746 (fracture) show
 ## Data rules
 
 - GRID data stays outside the repo (set `SIGHTLINE_DATA_ROOT`); `local/` and the data file patterns are gitignored.
-- Maps use simple vector shapes only, with no Riot textures.
+- No Riot map textures. The map is a plain bounding-box outline.
 
 ## License
 
