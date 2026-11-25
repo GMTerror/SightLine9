@@ -204,7 +204,7 @@
         </div>
       </div>
     </div>
-    <p class="foot">Outline = bounding box of all live <span id="mapn">fracture</span> cast positions (pos_x, pos_y) in this game, not the true map shape.
+    <p class="foot">Outline = simple vector zones where configured (maps.js; fracture zones are placeholders), otherwise the bounding box of all live <span id="mapn">fracture</span> cast positions (pos_x, pos_y). Not the true map shape.
       <b>n = <span id="n"></span></b> live casts in this game.</p>
   </section>
   <aside class="pane" id="side">
@@ -231,6 +231,7 @@
     </div>
   </aside>
 </main>
+<script src="/maps.js"></script>
 <script>
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), sel = document.getElementById('round');
 let B, PAD = 40, ROWS = [], PICK = null, SER = null, GAME = null, MATCHES = [], TOKEN = 0;
@@ -240,9 +241,24 @@ const gq = () => SER ? '&series=' + SER + '&game=' + GAME : '';
 const scale = () => Math.min((cv.width - 2*PAD) / (B.max_x - B.min_x), (cv.height - 2*PAD) / (B.max_y - B.min_y));
 const px = x => PAD + (x - B.min_x) * scale();
 const py = y => cv.height - PAD - (y - B.min_y) * scale();
+let MAPNAME = '', NOTED = {};
 function outline() {
   ctx.clearRect(0, 0, cv.width, cv.height);
-  ctx.strokeStyle = '#3d5392'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+  const cfg = (window.MAPS || {})[MAPNAME];
+  ctx.strokeStyle = '#3d5392'; ctx.lineWidth = 2;
+  if (cfg && cfg.zones && cfg.zones.length) {  // original vector zones
+    ctx.font = '600 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const z of cfg.zones) {
+      const pts = z.poly || [[z.rect[0], z.rect[1]], [z.rect[2], z.rect[1]], [z.rect[2], z.rect[3]], [z.rect[0], z.rect[3]]];
+      ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(px(p[0]), py(p[1])) : ctx.moveTo(px(p[0]), py(p[1]))); ctx.closePath();
+      ctx.fillStyle = 'rgba(79,140,255,.05)'; ctx.fill(); ctx.stroke();
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      ctx.fillStyle = 'rgba(143,160,196,.55)'; ctx.fillText(z.name, px(cx), py(cy));
+    }
+    return;
+  }
+  if (!NOTED[MAPNAME]) { NOTED[MAPNAME] = 1; console.info('maps.js: no zone config for "' + MAPNAME + '", using bounding box'); }
+  ctx.setLineDash([8, 6]);
   ctx.strokeRect(px(B.min_x), py(B.max_y), px(B.max_x) - px(B.min_x), py(B.min_y) - py(B.max_y));
   ctx.setLineDash([]);
 }
@@ -362,7 +378,7 @@ async function loadMatch() {
     if (!res.ok) throw new Error(res.status);
     const m = await res.json();
     if (tk !== TOKEN) return;
-    SER = s; GAME = g; B = m.bounds;  // outline = min/max cast positions of this game
+    SER = s; GAME = g; B = m.bounds; MAPNAME = m.map;  // fallback outline = min/max cast positions of this game
     document.getElementById('title').textContent = m.map + ', series ' + m.series;
     document.getElementById('mapn').textContent = m.map;
     document.title = 'Sightline9 - ' + m.map + ', series ' + m.series;

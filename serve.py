@@ -171,6 +171,8 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         if u.path == "/":
             body, ctype = (ROOT / "index.html").read_bytes(), "text/html; charset=utf-8"
+        elif u.path == "/maps.js":
+            body, ctype = (ROOT / "maps.js").read_bytes(), "text/javascript; charset=utf-8"
         elif u.path == "/api/series_list":
             body, ctype = json.dumps(series_list()).encode(), "application/json"
         elif u.path in ("/api/meta", "/api/casts"):
