@@ -11,7 +11,8 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).parent
 DB_PATH = ROOT / "local" / "sightline.sqlite"
 SERIES, MAP_NAME, WINDOW = "2748746", "fracture", 10
-TOP_CACHE = ROOT / "local" / "top_abilities.json"
+TOP_CACHE = ROOT / "local" / "top_abilities_all.json"
+MIN_RATE_CASTS = 20
 _top = None
 
 # Live casts in the fracture game(s) of the series, with the "followed by" outcome at WINDOW seconds.
@@ -55,12 +56,12 @@ def compute_top():
         summaries.append(coc.summarize_database(p, valid, team_ids))
     merged = coc.merge_summaries(summaries)
     rows = [{"ability": a, "casts": v["casts"], "caster_got_kill": v["caster_got_kill"]}
-            for a, v in coc._ranked(merged["counts"])[:coc.TOP_N]]
-    return {"window_s": coc.WINDOW, "series_n": len(series_ids), "rows": rows}
+            for a, v in coc._ranked(merged["counts"])]
+    return {"window_s": coc.WINDOW, "series_n": len(series_ids), "all": rows, "top_n": coc.TOP_N}
 
 
-def top_abilities():
-    """Memory cache, then JSON file cache (delete local/top_abilities.json to refresh), then compute."""
+def top_abilities(sort="count"):
+    """Cached all-ability counts (delete local/top_abilities_all.json to refresh); returns top N by count or rate."""
     global _top
     if _top is None:
         if TOP_CACHE.exists():
@@ -68,7 +69,12 @@ def top_abilities():
         else:
             _top = compute_top()
             TOP_CACHE.write_text(json.dumps(_top))
-    return _top
+    rows = _top["all"]
+    if sort == "rate":
+        rows = sorted((r for r in rows if r["casts"] >= MIN_RATE_CASTS),
+                      key=lambda r: (-r["caster_got_kill"] / r["casts"], -r["casts"], r["ability"]))
+    return {"window_s": _top["window_s"], "series_n": _top["series_n"], "sort": sort,
+            "min_casts": MIN_RATE_CASTS if sort == "rate" else 0, "rows": rows[:_top["top_n"]]}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -85,7 +91,8 @@ class Handler(BaseHTTPRequestHandler):
                     data = casts(db, int(parse_qs(u.query).get("round", ["0"])[0]))
             body, ctype = json.dumps(data).encode(), "application/json"
         elif u.path == "/api/top_abilities":
-            body, ctype = json.dumps(top_abilities()).encode(), "application/json"
+            sort = "rate" if parse_qs(u.query).get("sort", ["count"])[0] == "rate" else "count"
+            body, ctype = json.dumps(top_abilities(sort)).encode(), "application/json"
         else:
             self.send_error(404)
             return

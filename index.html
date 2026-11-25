@@ -13,6 +13,7 @@
 <canvas id="c" width="800" height="800" style="border:1px solid #ccc;margin-top:8px"></canvas>
 <div id="side" style="max-width:340px"><h4>Top 5 abilities, all series</h4>
 <p><b>Window: 10s after cast. Followed-by, not caused-by.</b></p>
+<p><a href="#" id="s_count">by count</a> | <a href="#" id="s_rate">by rate</a></p>
 <p id="topmeta" style="font-size:12px;color:#555"></p><ol id="top"></ol></div>
 </div>
 <p style="font-size:12px;color:#555">Outline = bounding box of all live fracture cast positions (pos_x, pos_y) in this series, not the true map shape.
@@ -56,9 +57,13 @@ function draw() {
   ctx.globalAlpha = 1;
   document.getElementById('count').textContent = 'Dots on screen: ' + rows.length;
 }
-(async () => {
-  fetch('/api/top_abilities').then(r => r.json()).then(t => {
-    document.getElementById('topmeta').textContent = 'Series n=' + t.series_n + ', window ' + t.window_s + 's';
+function loadTop(sort) {
+  document.getElementById('s_count').style.fontWeight = sort === 'count' ? 'bold' : 'normal';
+  document.getElementById('s_rate').style.fontWeight = sort === 'rate' ? 'bold' : 'normal';
+  fetch('/api/top_abilities?sort=' + sort).then(r => r.json()).then(t => {
+    document.getElementById('topmeta').textContent = 'Series n=' + t.series_n + ', window ' + t.window_s + 's' +
+      (t.min_casts ? ', abilities with n casts >= ' + t.min_casts : '');
+    document.getElementById('top').innerHTML = '';
     for (const r of t.rows) {
       const li = document.createElement('li');
       li.textContent = r.ability + ' \u2014 ' + r.caster_got_kill + ' followed by caster kill of ' + r.casts +
@@ -66,6 +71,10 @@ function draw() {
       document.getElementById('top').appendChild(li);
     }
   });
+}
+(async () => {
+  for (const s of ['count', 'rate']) document.getElementById('s_' + s).onclick = e => { e.preventDefault(); loadTop(s); };
+  loadTop('count');
   const m = await (await fetch('/api/meta')).json();
   B = m.bounds;
   document.getElementById('title').textContent = m.map + ', series ' + m.series;

@@ -18,7 +18,14 @@ def test_top_abilities_matches_card_ranking():
     top = serve.top_abilities()
     assert top["series_n"] == 28 and top["window_s"] == 10 and len(top["rows"]) == 5
     assert top["rows"][0] == {"ability": "dark-cover", "casts": 4834, "caster_got_kill": 370}
-    assert serve.top_abilities() is top  # cached, not recomputed
+    assert serve.top_abilities() == top  # served from cache
+
+
+def test_top_abilities_rate_sort():
+    rows = serve.top_abilities("rate")["rows"]
+    assert len(rows) == 5 and all(r["casts"] >= 20 for r in rows)
+    rates = [r["caster_got_kill"] / r["casts"] for r in rows]
+    assert rates == sorted(rates, reverse=True) and rows[0]["ability"] != "dark-cover"
 
 
 def test_round1_slider_extremes_and_view():
