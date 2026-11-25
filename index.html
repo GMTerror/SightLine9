@@ -77,7 +77,17 @@
   .hud-legend i.o { background: var(--idle); }
 
   /* dock */
-  .dock { display: flex; align-items: center; gap: 18px; padding: 10px 14px; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; }
+  .dock { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; }
+  .dock-row { display: flex; align-items: center; gap: 18px; }
+  .dock-match .field { flex: 1; min-width: 0; }
+  #match { flex: 1; min-width: 0; text-overflow: ellipsis; }
+  select:disabled { opacity: .55; cursor: progress; }
+  #loading { position: absolute; inset: 0; z-index: 2; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: rgba(5,7,13,.72); backdrop-filter: blur(3px); color: var(--text); font-weight: 600; }
+  #loading.on { display: flex; }
+  #loading small { color: var(--muted); font-weight: 400; }
+  #loading .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-hi); border-top-color: var(--accent-hi); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .field { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
   select {
     appearance: none; -webkit-appearance: none; color: var(--text); font: 600 14px var(--ui); letter-spacing: 0; text-transform: none;
@@ -136,7 +146,7 @@
   #top li:nth-child(2) { animation-delay: .04s; } #top li:nth-child(3) { animation-delay: .08s; }
   #top li:nth-child(4) { animation-delay: .12s; } #top li:nth-child(5) { animation-delay: .16s; }
   @keyframes in { from { opacity: 0; transform: translateY(6px); } }
-  @media (prefers-reduced-motion: reduce) { #top li { animation: none; } * { transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) { #top li { animation: none; } #loading .spin { animation-duration: 2.4s; } * { transition: none !important; } }
 </style>
 <body>
 <header>
@@ -155,16 +165,22 @@
         <span><i class="k"></i>caster got a kill within window</span>
         <span><i class="o"></i>otherwise</span>
       </div>
+      <div id="loading" role="status" aria-live="polite"><div class="spin"></div><span>Loading match&hellip;</span><small id="loadnote"></small></div>
     </div>
     <div class="dock">
-      <label class="field">Round <select id="round"></select></label>
-      <div class="scrub">
-        <label class="field">Time <span id="tlabel"></span></label>
-        <input type="range" id="t" step="1" aria-label="Time">
+      <div class="dock-row dock-match">
+        <label class="field">Match <select id="match"></select></label>
+      </div>
+      <div class="dock-row">
+        <label class="field">Round <select id="round"></select></label>
+        <div class="scrub">
+          <label class="field">Time <span id="tlabel"></span></label>
+          <input type="range" id="t" step="1" aria-label="Time">
+        </div>
       </div>
     </div>
-    <p class="foot">Outline = bounding box of all live fracture cast positions (pos_x, pos_y) in this series, not the true map shape.
-      <b>n = <span id="n"></span></b> live casts in the series.</p>
+    <p class="foot">Outline = bounding box of all live <span id="mapn">fracture</span> cast positions (pos_x, pos_y) in this game, not the true map shape.
+      <b>n = <span id="n"></span></b> live casts in this game.</p>
   </section>
   <aside class="pane" id="side">
     <h2>Top 5 abilities, all series</h2>
@@ -179,7 +195,9 @@
 </main>
 <script>
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), sel = document.getElementById('round');
-let B, PAD = 40, ROWS = [], PICK = null;
+let B, PAD = 40, ROWS = [], PICK = null, SER = null, GAME = null, MATCHES = [], TOKEN = 0;
+const matchSel = document.getElementById('match'), loadingEl = document.getElementById('loading');
+const gq = () => SER ? '&series=' + SER + '&game=' + GAME : '';
 // x to the right, y up (flipped); same scale on both axes.
 const scale = () => Math.min((cv.width - 2*PAD) / (B.max_x - B.min_x), (cv.height - 2*PAD) / (B.max_y - B.min_y));
 const px = x => PAD + (x - B.min_x) * scale();
@@ -193,7 +211,10 @@ function outline() {
 const T = r => Date.parse(r.cast_time);
 const tsl = document.getElementById('t');
 async function load() {
-  ROWS = await (await fetch('/api/casts?round=' + sel.value)).json();
+  const tk = TOKEN;
+  const rows = await (await fetch('/api/casts?round=' + sel.value + gq())).json();
+  if (tk !== TOKEN) return;
+  ROWS = rows;
   PICK = null;
   if (ROWS.length) { tsl.min = T(ROWS[0]); tsl.max = T(ROWS[ROWS.length - 1]); tsl.value = tsl.max; }
   draw();
@@ -248,15 +269,40 @@ function loadTop(sort) {
     }
   });
 }
+async function loadMatch() {
+  const [s, g] = matchSel.value.split('|'), tk = ++TOKEN;
+  document.getElementById('loadnote').textContent = 'first view of a series may take a moment if it has to be ingested';
+  loadingEl.classList.add('on'); matchSel.disabled = sel.disabled = true;
+  try {
+    const res = await fetch('/api/meta?series=' + s + '&game=' + g);
+    if (!res.ok) throw new Error(res.status);
+    const m = await res.json();
+    if (tk !== TOKEN) return;
+    SER = s; GAME = g; B = m.bounds;  // outline = min/max cast positions of this game
+    document.getElementById('title').textContent = m.map + ', series ' + m.series;
+    document.getElementById('mapn').textContent = m.map;
+    document.title = 'Sightline9 - ' + m.map + ', series ' + m.series;
+    document.getElementById('n').textContent = B.n;
+    sel.innerHTML = '';
+    for (const r of m.rounds) sel.add(new Option('Round ' + r, r));
+    await load();
+  } catch (err) {
+    document.getElementById('loadnote').textContent = 'Could not load this match (' + err.message + ')';
+    return;
+  } finally {
+    if (tk === TOKEN) { loadingEl.classList.remove('on'); matchSel.disabled = sel.disabled = false; }
+  }
+}
 (async () => {
   for (const s of ['count', 'rate']) document.getElementById('s_' + s).onclick = e => { e.preventDefault(); loadTop(s); };
   loadTop('count');
-  const m = await (await fetch('/api/meta')).json();
-  B = m.bounds;
-  document.getElementById('title').textContent = m.map + ', series ' + m.series;
-  document.getElementById('n').textContent = B.n;
-  for (const r of m.rounds) sel.add(new Option('Round ' + r, r));
-  sel.onchange = load; tsl.oninput = draw; load();
+  MATCHES = await (await fetch('/api/series_list')).json();
+  for (const g of MATCHES)
+    matchSel.add(new Option(g.map_name + ' \u2014 ' + g.team1 + ' vs ' + g.team2 + ' (' + g.series_id + ')', g.series_id + '|' + g.game_id));
+  const d = MATCHES.find(g => g.series_id === '2748746' && g.map_name === 'fracture');
+  if (d) matchSel.value = d.series_id + '|' + d.game_id;
+  matchSel.onchange = loadMatch; sel.onchange = load; tsl.oninput = draw;
+  await loadMatch();
   cv.onclick = e => {
     // canvas is CSS-scaled, so map client px back to canvas px
     const b = cv.getBoundingClientRect(), mx = (e.clientX - b.left) * cv.width / b.width, my = (e.clientY - b.top) * cv.height / b.height;

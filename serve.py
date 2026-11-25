@@ -2,9 +2,11 @@
 
 Run: python serve.py  ->  http://localhost:8000
 """
+import csv
 import json
 import sqlite3
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -14,33 +16,84 @@ SERIES, MAP_NAME, WINDOW = "2748746", "fracture", 10
 TOP_CACHE = ROOT / "local" / "top_abilities_all.json"
 MIN_RATE_CASTS = 20
 _top = None
+POOLED = ROOT / "local" / "pooled"
+_series_cache = None
+_ingest_lock = threading.Lock()
 
-# Live casts in the fracture game(s) of the series, with the "followed by" outcome at WINDOW seconds.
+# Live casts in one game, with the "followed by" outcome at WINDOW seconds.
 BASE = """FROM casts c
-JOIN games g ON g.series_id = c.series_id AND g.game_id = c.game_id
 JOIN cast_outcomes o ON o.cast_id = c.rowid AND o.window_s = ?
-WHERE c.series_id = ? AND g.map_name = ? AND c.is_live = 1"""
-ARGS = (WINDOW, SERIES, MAP_NAME)
+WHERE c.series_id = ? AND c.game_id = ? AND c.is_live = 1"""
 
 
 def connect(db_path=DB_PATH):
     return sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
 
 
-def rounds(db):
-    return [r[0] for r in db.execute(f"SELECT DISTINCT c.round_number {BASE} ORDER BY 1", ARGS)]
+def _args(db, series=SERIES, game=None):
+    """Query args for a game; game=None means the original default (MAP_NAME game of SERIES)."""
+    if game is None:
+        game = db.execute("SELECT game_id FROM games WHERE series_id = ? AND map_name = ?", (series, MAP_NAME)).fetchone()[0]
+    return (WINDOW, series, game)
 
 
-def bounds(db):
-    r = db.execute(f"SELECT MIN(c.pos_x), MAX(c.pos_x), MIN(c.pos_y), MAX(c.pos_y), COUNT(*) {BASE}", ARGS).fetchone()
+def rounds(db, series=SERIES, game=None):
+    return [r[0] for r in db.execute(f"SELECT DISTINCT c.round_number {BASE} ORDER BY 1", _args(db, series, game))]
+
+
+def bounds(db, series=SERIES, game=None):
+    r = db.execute(f"SELECT MIN(c.pos_x), MAX(c.pos_x), MIN(c.pos_y), MAX(c.pos_y), COUNT(*) {BASE}",
+                   _args(db, series, game)).fetchone()
     return dict(zip(("min_x", "max_x", "min_y", "max_y", "n"), r))
 
 
-def casts(db, round_number):
+def casts(db, round_number, series=SERIES, game=None):
     q = (f"SELECT c.pos_x, c.pos_y, o.caster_got_kill, c.ability, c.player_id, c.cast_time, c.view_x, c.view_y "
          f"{BASE} AND c.round_number = ? ORDER BY c.cast_time")
     return [dict(zip(("x", "y", "got_kill", "ability", "player_id", "cast_time", "view_x", "view_y"), r))
-            for r in db.execute(q, ARGS + (round_number,))]
+            for r in db.execute(q, _args(db, series, game) + (round_number,))]
+
+
+def series_list():
+    """Every game of the indexed (Cloud9) series, from meta/games.csv (names, map, game number)."""
+    global _series_cache
+    if _series_cache is None:
+        import cast_outcome_card as coc
+        _, sids = coc.cloud9(coc.DATA_ROOT)
+        sids = set(sids)
+        with open(coc.DATA_ROOT / "meta" / "games.csv", encoding="utf-8") as f:
+            rows = [r for r in csv.DictReader(f) if r["title"] == "val" and r["series_id"] in sids]
+        _series_cache = sorted(({"series_id": r["series_id"], "game_id": r["game_id"], "map_name": r["map"],
+                                 "game_number": int(r["game_number"]), "team1": r["team1_name"],
+                                 "team2": r["team2_name"]} for r in rows),
+                               key=lambda g: (g["series_id"], g["game_number"]))
+    return _series_cache
+
+
+def db_path_for(series):
+    """DB for a listed series; ingests it into local/pooled on first use. Raises KeyError if not listed."""
+    if not any(g["series_id"] == series for g in series_list()):
+        raise KeyError(series)
+    if series == SERIES:
+        return DB_PATH
+    p = POOLED / f"{series}.sqlite"
+    with _ingest_lock:
+        if not p.exists():
+            import ingest_series
+            ingest_series.ingest(series, db_path=p)
+    return p
+
+
+def match_data(series, game, round_number=None):
+    """meta (round_number None) or casts for one listed game."""
+    if not any(g["series_id"] == series and g["game_id"] == game for g in series_list()):
+        raise KeyError(game)
+    with connect(db_path_for(series)) as db:
+        if round_number is None:
+            info = next(g for g in series_list() if g["game_id"] == game)
+            return {"rounds": rounds(db, series, game), "bounds": bounds(db, series, game), "window_s": WINDOW,
+                    "map": info["map_name"], "series": series, "game": game}
+        return casts(db, round_number, series, game)
 
 
 def compute_top():
@@ -82,13 +135,24 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         if u.path == "/":
             body, ctype = (ROOT / "index.html").read_bytes(), "text/html; charset=utf-8"
+        elif u.path == "/api/series_list":
+            body, ctype = json.dumps(series_list()).encode(), "application/json"
         elif u.path in ("/api/meta", "/api/casts"):
-            with connect() as db:
-                if u.path == "/api/meta":
-                    data = {"rounds": rounds(db), "bounds": bounds(db), "window_s": WINDOW,
-                            "map": MAP_NAME, "series": SERIES}
+            q = parse_qs(u.query)
+            sid, gid = q.get("series", [None])[0], q.get("game", [None])[0]
+            try:
+                if sid is None or gid is None:  # original behaviour: default series/map
+                    with connect() as db:
+                        if u.path == "/api/meta":
+                            data = {"rounds": rounds(db), "bounds": bounds(db), "window_s": WINDOW,
+                                    "map": MAP_NAME, "series": SERIES}
+                        else:
+                            data = casts(db, int(q.get("round", ["0"])[0]))
                 else:
-                    data = casts(db, int(parse_qs(u.query).get("round", ["0"])[0]))
+                    data = match_data(sid, gid, int(q.get("round", ["0"])[0]) if u.path == "/api/casts" else None)
+            except KeyError:
+                self.send_error(404)
+                return
             body, ctype = json.dumps(data).encode(), "application/json"
         elif u.path == "/api/top_abilities":
             sort = "rate" if parse_qs(u.query).get("sort", ["count"])[0] == "rate" else "count"
@@ -104,4 +168,4 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print("http://localhost:8000")
-    HTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
