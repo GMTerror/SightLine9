@@ -16,6 +16,8 @@ SERIES, MAP_NAME, WINDOW = "2748746", "fracture", 10
 TOP_CACHE = ROOT / "local" / "top_abilities_all.json"
 MIN_RATE_CASTS = 20
 _top = None
+OP_CACHE = ROOT / "local" / "operator_profile.json"
+_op = None
 POOLED = ROOT / "local" / "pooled"
 _series_cache = None
 _ingest_lock = threading.Lock()
@@ -130,6 +132,40 @@ def top_abilities(sort="count"):
             "min_casts": MIN_RATE_CASTS if sort == "rate" else 0, "rows": rows[:_top["top_n"]]}
 
 
+def compute_operator():
+    """Top opponents by Operator rounds, via operator_profile.top_opponents (streams the GRID feeds once)."""
+    import operator_profile as op
+    team_ids, sids = op.cloud9()
+    ok = op.valid_games()
+    rounds, players = [], {}
+    for sid in sids:
+        rs, ps = op.scan_series(sid)
+        players.update(ps)
+        rounds += [r for r in rs if r["game"] in ok]
+    out = []
+    for p in op.top_opponents(rounds, players, team_ids):
+        sides = {}
+        for a in p["analyzed"]:
+            sides[a["side"]] = sides.get(a["side"], 0) + 1
+        side = ", ".join(f"{s} (n={n})" for s, n in sorted(sides.items(), key=lambda x: str(x[0]))) or "unknown"
+        out.append({"name": p["name"], "side": side, "op_rounds": p["op_rounds"], "early_deaths": len(p["analyzed"]),
+                    "abilities": [{"ability": a, "n": n, "casts": len(c)} for a, n, c in p["ranked"][:3]],
+                    "too_small": not p["ranked"] or p["ranked"][0][1] < op.MIN_N})
+    return {"window_s": op.WINDOW_S, "min_n": op.MIN_N, "series_n": len(sids), "opponents": out}
+
+
+def operator_profile_data():
+    """Cached like top_abilities (delete local/operator_profile.json to refresh)."""
+    global _op
+    if _op is None:
+        if OP_CACHE.exists():
+            _op = json.loads(OP_CACHE.read_text())
+        else:
+            _op = compute_operator()
+            OP_CACHE.write_text(json.dumps(_op))
+    return _op
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
@@ -157,6 +193,8 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/top_abilities":
             sort = "rate" if parse_qs(u.query).get("sort", ["count"])[0] == "rate" else "count"
             body, ctype = json.dumps(top_abilities(sort)).encode(), "application/json"
+        elif u.path == "/api/operator_profile":
+            body, ctype = json.dumps(operator_profile_data()).encode(), "application/json"
         else:
             self.send_error(404)
             return

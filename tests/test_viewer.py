@@ -52,6 +52,15 @@ def test_top_abilities_rate_sort():
     assert rates == sorted(rates, reverse=True) and rows[0]["ability"] != "dark-cover"
 
 
+def test_operator_profile_flags_small_samples():
+    d = serve.operator_profile_data()
+    assert d["min_n"] == 3 and len(d["opponents"]) == 3 and serve.operator_profile_data() is d  # cached
+    for o in d["opponents"]:
+        top = o["abilities"][0]["n"] if o["abilities"] else 0
+        assert o["too_small"] == (top < 3) and len(o["abilities"]) <= 3 and o["early_deaths"] > 0
+    assert {"Elab0rate", "aspas", "yay"} <= {o["name"] for o in d["opponents"] if o["too_small"]}
+
+
 def test_round1_slider_extremes_and_view():
     with serve.connect() as db:
         rows = serve.casts(db, 1)

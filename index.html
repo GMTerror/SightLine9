@@ -147,6 +147,31 @@
   #top li:nth-child(4) { animation-delay: .12s; } #top li:nth-child(5) { animation-delay: .16s; }
   @keyframes in { from { opacity: 0; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { #top li { animation: none; } #loading .spin { animation-duration: 2.4s; } * { transition: none !important; } }
+  #copy { border: 1px solid var(--line-hi); border-radius: 8px; padding: 9px 0; background: var(--raised); color: var(--text); cursor: pointer; font: 600 13px var(--ui);
+    transition: border-color .2s var(--ease), background .2s var(--ease); }
+  #copy:hover { border-color: var(--accent); }
+  #copy.done { background: var(--kill); border-color: var(--kill); color: #03170c; }
+  .sidepane { display: flex; flex-direction: column; gap: 14px; }
+  .sidepane[hidden] { display: none; }
+  #opmeta { margin: 0; font-size: 12px; color: var(--faint); }
+  #ops { display: flex; flex-direction: column; gap: 10px; }
+  .opc { padding: 12px; border-radius: 10px; background: var(--raised); border: 1px solid transparent; display: flex; flex-direction: column; gap: 8px; }
+  .opc.small { border-color: rgba(255,176,32,.45); }
+  .opc .hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .opc .nm { font-weight: 700; font-size: 15px; }
+  .opc .side { font-size: 11px; color: var(--muted); text-align: right; }
+  .opc .rn { font-size: 12px; color: var(--muted); }
+  .opc .rn b { color: var(--text); }
+  .opc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .opc li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 6px 9px; border-radius: 7px; background: var(--bg); }
+  .opc li .ab { font-weight: 700; overflow-wrap: anywhere; }
+  .opc li .nn { font: 700 12px var(--mono); color: var(--accent-hi); white-space: nowrap; }
+  .opc.small li .nn { color: #ffb020; }
+  .opc .warn { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: #ffd48a; background: rgba(255,176,32,.12); border: 1px solid rgba(255,176,32,.55); }
+  .opc .warn::before { content: "!"; flex: none; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
+    background: #ffb020; color: #1a1000; font: 800 11px var(--ui); margin-top: 1px; }
+  .opc .note { font-size: 11px; color: var(--faint); }
 </style>
 <body>
 <header>
@@ -183,6 +208,11 @@
       <b>n = <span id="n"></span></b> live casts in this game.</p>
   </section>
   <aside class="pane" id="side">
+    <div class="tabs" role="tablist">
+      <button type="button" id="m_general" class="on" role="tab">General patterns</button>
+      <button type="button" id="m_op" role="tab">Operator tendencies</button>
+    </div>
+    <div id="pane_general" class="sidepane">
     <h2>Top 5 abilities, all series</h2>
     <span class="caption">Window: 10s after cast. Followed-by, not caused-by.</span>
     <div class="tabs">
@@ -191,6 +221,14 @@
     </div>
     <p id="topmeta"></p>
     <ol id="top"></ol>
+    <button type="button" id="copy">Copy callout</button>
+    </div>
+    <div id="pane_op" class="sidepane" hidden>
+      <h2>Operator tendencies</h2>
+      <span class="caption">Window: 10s before early death. Followed-by, not caused-by.</span>
+      <p id="opmeta"></p>
+      <div id="ops"></div>
+    </div>
   </aside>
 </main>
 <script>
@@ -252,6 +290,7 @@ function loadTop(sort) {
     document.getElementById('topmeta').textContent = 'Series n=' + t.series_n + ', window ' + t.window_s + 's' +
       (t.min_casts ? ', abilities with n casts >= ' + t.min_casts : '');
     document.getElementById('top').innerHTML = '';
+    TOPDATA = t;
     let i = 0;
     for (const r of t.rows) {
       const li = document.createElement('li'), p = 100 * r.caster_got_kill / r.casts;
@@ -268,6 +307,51 @@ function loadTop(sort) {
       document.getElementById('top').appendChild(li);
     }
   });
+}
+let TOPDATA = null;
+function calloutText(t) {
+  const r = t.rows[0];
+  return r.ability + ': followed by a caster kill in ' + r.caster_got_kill + ' of ' + r.casts + ' casts (' +
+    (100 * r.caster_got_kill / r.casts).toFixed(1) + '%) across ' + t.series_n + ' series, window ' + t.window_s + 's. Followed-by, not caused-by.';
+}
+async function copyCallout() {
+  if (!TOPDATA || !TOPDATA.rows.length) return;
+  const txt = calloutText(TOPDATA), b = document.getElementById('copy');
+  try { await navigator.clipboard.writeText(txt); }
+  catch (e) { const a = document.createElement('textarea'); a.value = txt; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); }
+  b.textContent = 'Copied'; b.classList.add('done');
+  setTimeout(() => { b.textContent = 'Copy callout'; b.classList.remove('done'); }, 1500);
+}
+let OPLOADED = false;
+function showTab(which) {
+  document.getElementById('m_general').classList.toggle('on', which === 'general');
+  document.getElementById('m_op').classList.toggle('on', which === 'op');
+  document.getElementById('pane_general').hidden = which !== 'general';
+  document.getElementById('pane_op').hidden = which !== 'op';
+  if (which === 'op' && !OPLOADED) { OPLOADED = true; loadOp(); }
+}
+function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+function loadOp() {
+  const box = document.getElementById('ops'), meta = document.getElementById('opmeta');
+  meta.textContent = 'Loading\u2026'; box.innerHTML = '';
+  fetch('/api/operator_profile').then(r => r.json()).then(d => {
+    meta.textContent = 'Series n=' + d.series_n + ', top ' + d.opponents.length + ' opponents by Operator rounds. Shown as a tendency only when top ability n >= ' + d.min_n + '.';
+    for (const o of d.opponents) {
+      const c = el('div', 'opc' + (o.too_small ? ' small' : ''));
+      const hd = el('div', 'hd'); hd.append(el('span', 'nm', o.name), el('span', 'side', 'Side at death: ' + o.side));
+      const rn = el('div', 'rn'); rn.innerHTML = 'Operator rounds: <b>' + o.op_rounds + '</b>, early deaths analyzed: <b>' + o.early_deaths + '</b>';
+      c.append(hd, rn);
+      if (o.too_small) c.append(el('div', 'warn', 'Sample too small \u2014 not shown as a tendency (top ability n=' + (o.abilities.length ? o.abilities[0].n : 0) + ' < ' + d.min_n + ')'));
+      const ul = el('ul');
+      for (const a of o.abilities) {
+        const li = el('li'); li.append(el('span', 'ab', a.ability), el('span', 'nn', 'n=' + a.n + '/' + o.early_deaths));
+        ul.append(li);
+      }
+      if (o.abilities.length) c.append(ul);
+      c.append(el('div', 'note', 'n/M = early-death rounds where a Cloud9 cast of the ability came within ' + d.window_s + 's before the death.'));
+      box.append(c);
+    }
+  }).catch(err => { meta.textContent = 'Could not load operator tendencies (' + err.message + ')'; });
 }
 async function loadMatch() {
   const [s, g] = matchSel.value.split('|'), tk = ++TOKEN;
@@ -296,6 +380,9 @@ async function loadMatch() {
 (async () => {
   for (const s of ['count', 'rate']) document.getElementById('s_' + s).onclick = e => { e.preventDefault(); loadTop(s); };
   loadTop('count');
+  document.getElementById('copy').onclick = copyCallout;
+  document.getElementById('m_general').onclick = () => showTab('general');
+  document.getElementById('m_op').onclick = () => showTab('op');
   MATCHES = await (await fetch('/api/series_list')).json();
   for (const g of MATCHES)
     matchSel.add(new Option(g.map_name + ' \u2014 ' + g.team1 + ' vs ' + g.team2 + ' (' + g.series_id + ')', g.series_id + '|' + g.game_id));
