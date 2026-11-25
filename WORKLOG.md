@@ -9,3 +9,4 @@
 - 2026-11-24: Step 5 done with Sonnet. Aim lines on click, time slider, round 1 min=1 dot max=14 dots verified.
 - 2026-11-25: Step 6 done with Opus (profiler) + Sonnet (28-series rerun). Operator profiler built, correctly warns too-small on all 28 series (top ability n=2, below 3). Decision: add separate general cast-outcome card (no Operator filter, pooled, window=10) as main demo card. Operator profiler kept as honest-warning demo moment.
 - 2026-11-25: General cast-outcome card done with Sonnet. Pooled 28 series, window=10. Top: dark-cover 370/4834 caster-kill-followed casts. This is the main demo card. Operator profiler kept as honest small-sample warning.
+- 2026-11-25: Sidebar wired to real pooled numbers (dark-cover 370/4834 top), Sonnet. Demo flow: canvas + aim lines + round/time slider on left, general-pattern sidebar on right.
