@@ -16,3 +16,4 @@
 - 2026-11-25: Operator tendencies tab added, Sonnet. All 3 opponents correctly flagged too_small in UI. First load ~90s (28-series scan), cached after. Pre-warm cache before live demo.
 - 2026-11-25: Copy-callout button added, Sonnet. Verified clipboard text matches top ability, updates with count/rate toggle.
 - 2026-11-25: Zone renderer built, Sonnet. Fracture placeholder zones don't match real H-shaped layout, confirmed via web search. Lower priority, revisit if time allows. Fallback to bounding box works for unconfigured maps.
+- 2026-11-25: Compare mode added to Operator tab, Sonnet. Side-by-side cards, defaults to top 2 opponents by round count, both amber warnings render correctly matching known numbers.
